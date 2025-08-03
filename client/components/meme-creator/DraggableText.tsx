@@ -1,3 +1,4 @@
+import React, { useRef, useCallback } from "react";
 import { TextBox, Position } from "./types";
 
 interface DraggableTextProps {
@@ -5,95 +6,158 @@ interface DraggableTextProps {
   onMove: (id: string, position: Position) => void;
 }
 
-export const DraggableText: React.FC<DraggableTextProps>  = ({
+export const DraggableText: React.FC<DraggableTextProps> = ({
   box,
   onMove,
-}: {
-  box: TextBox;
-  onMove: (id: string, position: Position) => void;
 }) => {
-  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
-    // Prevent default behavior to stop pull-to-refresh
+  const dragState = useRef({
+    isDragging: false,
+    startPos: { x: 0, y: 0 },
+    offset: { x: 0, y: 0 }
+  });
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only handle left mouse button
+    if (e.button !== 0) return;
+    
+    e.stopPropagation();
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    dragState.current.isDragging = true;
+    dragState.current.startPos = { x: e.clientX, y: e.clientY };
+    dragState.current.offset = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+
+    // Add event listeners to document (not window)
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    // Prevent text selection during drag
+    document.body.style.userSelect = 'none';
+  }, []);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!dragState.current.isDragging) return;
+
+    // Get the container boundaries
+    const container = document.querySelector(".image-container");
+    if (!container) return;
+
+    const containerRect = container.getBoundingClientRect();
+
+    // Calculate new position relative to container
+    let newX = e.clientX - containerRect.left - dragState.current.offset.x;
+    let newY = e.clientY - containerRect.top - dragState.current.offset.y;
+
+    // Get text element dimensions for boundary constraints
+    const textElement = document.querySelector(`[data-text-id="${box.id}"]`);
+    const textRect = textElement?.getBoundingClientRect();
+    const textWidth = textRect?.width || 100;
+    const textHeight = textRect?.height || 30;
+
+    // Constrain movement within container bounds
+    newX = Math.max(0, Math.min(newX, containerRect.width - textWidth));
+    newY = Math.max(0, Math.min(newY, containerRect.height - textHeight));
+
+    onMove(box.id, { x: newX, y: newY });
+  }, [box.id, onMove]);
+
+  const handleMouseUp = useCallback(() => {
+    dragState.current.isDragging = false;
+    
+    // Remove event listeners
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+    
+    // Restore text selection
+    document.body.style.userSelect = '';
+  }, [handleMouseMove]);
+
+  // Touch event handlers with proper passive handling
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    
+    const touch = e.touches[0];
+    const rect = e.currentTarget.getBoundingClientRect();
+    
+    dragState.current.isDragging = true;
+    dragState.current.startPos = { x: touch.clientX, y: touch.clientY };
+    dragState.current.offset = {
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top
+    };
+
+    // Add touch event listeners
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd);
+  }, []);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!dragState.current.isDragging || e.touches.length !== 1) return;
+
+    // Prevent default scrolling behavior
     e.preventDefault();
+    
+    const touch = e.touches[0];
+    const container = document.querySelector(".image-container");
+    if (!container) return;
 
-    const isTouch = "touches" in e;
-    const startX = isTouch
-      ? e.touches[0].clientX
-      : (e as React.MouseEvent).clientX;
-    const startY = isTouch
-      ? e.touches[0].clientY
-      : (e as React.MouseEvent).clientY;
+    const containerRect = container.getBoundingClientRect();
 
-    const element = isTouch
-      ? (e.target as HTMLElement).getBoundingClientRect()
-      : (e.currentTarget as HTMLElement).getBoundingClientRect();
+    let newX = touch.clientX - containerRect.left - dragState.current.offset.x;
+    let newY = touch.clientY - containerRect.top - dragState.current.offset.y;
 
-    const offsetX = startX - element.left;
-    const offsetY = startY - element.top;
+    // Get text element dimensions
+    const textElement = document.querySelector(`[data-text-id="${box.id}"]`);
+    const textRect = textElement?.getBoundingClientRect();
+    const textWidth = textRect?.width || 100;
+    const textHeight = textRect?.height || 30;
 
-    const handleDragMove = (event: MouseEvent | TouchEvent) => {
-      // Prevent default to stop unwanted behaviors
-      event.preventDefault();
+    // Constrain movement
+    newX = Math.max(0, Math.min(newX, containerRect.width - textWidth));
+    newY = Math.max(0, Math.min(newY, containerRect.height - textHeight));
 
-      const moveX =
-        "touches" in event
-          ? event.touches[0].clientX
-          : (event as MouseEvent).clientX;
-      const moveY =
-        "touches" in event
-          ? event.touches[0].clientY
-          : (event as MouseEvent).clientY;
+    onMove(box.id, { x: newX, y: newY });
+  }, [box.id, onMove]);
 
-      // Get the container boundaries
-      const container = document.querySelector(".image-container");
-      if (!container) return;
+  const handleTouchEnd = useCallback(() => {
+    dragState.current.isDragging = false;
+    
+    document.removeEventListener('touchmove', handleTouchMove);
+    document.removeEventListener('touchend', handleTouchEnd);
+  }, [handleTouchMove]);
 
-      const containerRect = container.getBoundingClientRect();
-
-      // Calculate new position relative to container
-      let newX = moveX - containerRect.left - offsetX;
-      let newY = moveY - containerRect.top - offsetY;
-
-      // Constrain movement within container bounds
-      newX = Math.max(0, Math.min(newX, containerRect.width - element.width));
-      newY = Math.max(0, Math.min(newY, containerRect.height - element.height));
-
-      onMove(box.id, {
-        x: newX,
-        y: newY,
-      });
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+      document.body.style.userSelect = '';
     };
-
-    const handleDragEnd = () => {
-      window.removeEventListener("mousemove", handleDragMove);
-      window.removeEventListener("mouseup", handleDragEnd);
-      window.removeEventListener("touchmove", handleDragMove);
-      window.removeEventListener("touchend", handleDragEnd);
-    };
-
-    window.addEventListener("mousemove", handleDragMove, { passive: false });
-    window.addEventListener("mouseup", handleDragEnd);
-    window.addEventListener("touchmove", handleDragMove, { passive: false });
-    window.addEventListener("touchend", handleDragEnd);
-  };
+  }, [handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
 
   return (
     <div
-      className="absolute touch-none cursor-move p-3 bg-black/50 rounded-lg backdrop-blur-sm"
+      data-text-id={box.id}
+      className="absolute cursor-move p-3 bg-black/50 rounded-lg backdrop-blur-sm select-none"
       style={{
         left: `${box.position.x}px`,
         top: `${box.position.y}px`,
         fontSize: `${box.fontSize}px`,
         color: box.color,
         textShadow: "2px 2px 2px rgba(0,0,0,0.8)",
-        WebkitUserSelect: "none",
-        userSelect: "none",
-        transform: "translate3d(0,0,0)", // Forces GPU acceleration
+        touchAction: 'none', // Prevents default touch behaviors
       }}
-      onMouseDown={handleDragStart}
-      onTouchStart={handleDragStart}
+      onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
     >
-      <div className="text-white">{box.text}</div>
+      <div className="text-white pointer-events-none">
+        {box.text}
+      </div>
     </div>
   );
 };

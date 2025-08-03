@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { TextBox } from "./types";
 import { DraggableText } from "./DraggableText";
@@ -34,6 +34,13 @@ const Stage2: React.FC<Stage2Props> = ({
   trueApi,
   memeTemplate,
 }) => {
+  const [isClient, setIsClient] = useState(false);
+  const account = useAccount();
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const addTextBox = () => {
     const newBox: TextBox = {
       id: `text-${Date.now()}`,
@@ -45,10 +52,8 @@ const Stage2: React.FC<Stage2Props> = ({
     setTextBoxes((prev) => [...prev, newBox]);
   };
 
-  const account = useAccount();
-
   const generateMeme = async () => {
-    if (!imageContainerRef.current || !capturedImage) return;
+    if (!imageContainerRef.current || !capturedImage || !isClient) return;
 
     setIsLoading(true);
     setLoadingMessage("Generating your meme...");
@@ -87,21 +92,25 @@ const Stage2: React.FC<Stage2Props> = ({
     }
   };
 
+  if (!isClient) {
+    return <div>Loading editor...</div>;
+  }
+
   return (
     <div className="flex flex-col items-center w-full">
       <div className="relative w-full h-[70vh] bg-gray-900 rounded-lg overflow-hidden mb-4">
         {capturedImage && (
           <div
-            ref={imageContainerRef}
-            className="relative w-full h-[70vh] bg-gray-900 rounded-lg overflow-hidden mb-4 image-container"
-            onTouchMove={(e) => e.preventDefault()} // Prevent pull-to-refresh
-          >
-            <img
-              src={capturedImage}
-              alt="Template"
-              className="w-full h-full object-contain"
-            />
-          </div>
+  ref={imageContainerRef}
+  className="relative w-full h-[70vh] bg-gray-900 rounded-lg overflow-hidden mb-4 image-container"
+  style={{ touchAction: 'pan-y' }} // Allow vertical scrolling but prevent horizontal pan
+>
+  <img
+    src={capturedImage}
+    alt="Template"
+    className="w-full h-full object-contain pointer-events-none" // Prevent image interference
+  />
+</div>
         )}
         {textBoxes.map((box) => (
           <DraggableText

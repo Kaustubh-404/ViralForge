@@ -1,16 +1,25 @@
-
 import { TrueApi, testnet } from '@truenetworkio/sdk'
 import { TrueConfig } from '@truenetworkio/sdk/dist/utils/cli-config'
 
-// If you are not in a NodeJS environment, please comment the code following code:
-import dotenv from 'dotenv'
-dotenv.config()
+// Only import dotenv in Node.js environment
+let dotenv: any;
+if (typeof window === 'undefined') {
+  dotenv = require('dotenv');
+  dotenv.config();
+}
 
 export const getTrueNetworkInstance = async (): Promise<TrueApi> => {
-  const trueApi = await TrueApi.create(config.account.secret)
-
-  await trueApi.setIssuer(config.issuer.hash)
-
+  // Get secret from environment or browser storage
+  const secret = typeof window === 'undefined' 
+    ? process.env.TRUE_NETWORK_SECRET_KEY 
+    : process.env.NEXT_PUBLIC_TRUE_NETWORK_SECRET_KEY;
+    
+  if (!secret) {
+    throw new Error('TRUE_NETWORK_SECRET_KEY not found');
+  }
+  
+  const trueApi = await TrueApi.create(secret);
+  await trueApi.setIssuer(config.issuer.hash);
   return trueApi;
 }
 
@@ -18,7 +27,9 @@ export const config: TrueConfig = {
   network: testnet,
   account: {
     address: 'ms9Ec1G7fwWDSiB5L61fceehD4MBmaCR69kJgfKfbvcof2B',
-    secret: process.env.TRUE_NETWORK_SECRET_KEY ?? ''
+    secret: typeof window === 'undefined' 
+      ? process.env.TRUE_NETWORK_SECRET_KEY ?? ''
+      : process.env.NEXT_PUBLIC_TRUE_NETWORK_SECRET_KEY ?? ''
   },
   issuer: {
     name: 'FunnyOrFud',
@@ -30,4 +41,3 @@ export const config: TrueConfig = {
     schemas: []
   },
 }
-  

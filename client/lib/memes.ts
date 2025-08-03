@@ -19,9 +19,40 @@ export const templates = Array.from({ length: 18 }, (_, i) => ({
   alt: `Meme Template ${i + 1}`,
 }));
 
+// FIXED: Clean type definitions without conflicting extensions
 export interface MemeTemplate {
+  creator: string;
+  cid: string;
+  memeTemplate: string;
+  image?: string;
+  isTemplate?: boolean;
+}
+
+// Contract types (what comes from blockchain)
+export interface ContractMeme {
+  creator: string;
+  cid: string;
+  memeTemplate: number; // Number from contract
+}
+
+// Display types (what we show in UI) - separate interface without extension
+export interface DisplayMeme {
+  creator: string;
+  cid: string;
+  memeTemplate: string; // String for display
+  image: string;
+}
+
+// Template-specific type
+export interface TemplateMeme {
   cid: string;
   image: string;
   isTemplate: boolean;
   memeTemplate: string;
 }
+
+// Utility type for conversion
+export type ContractToDisplay = Omit<ContractMeme, 'memeTemplate'> & {
+  memeTemplate: string;
+  image: string;
+};

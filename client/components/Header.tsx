@@ -30,27 +30,27 @@ const Header: React.FC = () => {
 
 
   const addChain = async () => {
-    if (chains) {
-      if (window.ethereum)
-        await window.ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [
-            {
-              chainId: "0x14A34", // Base Sepolia's chain ID in hexadecimal (84532 in decimal)
-              chainName: "Base Sepolia",
-              nativeCurrency: {
-                name: "ETH",
-                symbol: "ETH",
-                decimals: 18,
-              },
-              rpcUrls: ["https://sepolia.base.org"],
-              blockExplorerUrls: ["https://sepolia.basescan.org"],
+  if (chains) {
+    if (window.ethereum)
+      await window.ethereum.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: "0x1284A", // Etherlink testnet chain ID
+            chainName: "Etherlink Testnet",
+            nativeCurrency: {
+              name: "XTZ",
+              symbol: "XTZ",
+              decimals: 18,
             },
-          ],
-        });
-      switchChain({ chainId: 84532 });
-    }
-  };
+            rpcUrls: ["https://node.ghostnet.etherlink.com"],
+            blockExplorerUrls: ["https://testnet-explorer.etherlink.com"],
+          },
+        ],
+      });
+    switchChain({ chainId: 128138 }); // Etherlink testnet chain ID
+  }
+};
 
   useEffect(() => {
     if (address) giveGas(address as string);

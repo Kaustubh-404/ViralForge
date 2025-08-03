@@ -89,6 +89,8 @@ export const uploadImage = async (base64: string) => {
 }
 
 // FIXED: Enhanced investInTemplate with proper type handling and error management
+// lib/utils.ts - Updated investInTemplate function with vote tracking
+
 export const investInTemplate = async (
   userAddress: string,
   marketId: number,
@@ -106,19 +108,16 @@ export const investInTemplate = async (
       throw new Error('Invalid market ID');
     }
 
-    // IMPORTANT: User pays 0.0001 XTZ directly via MetaMask
     const voteCost = parseEther("0.0001"); // 0.0001 XTZ
-
-    // Type assertion to fix wagmi config compatibility
     const wagmiConfig = config as any;
 
-    // Show MetaMask popup for user to pay
+    // Execute the vote transaction
     const hash = await writeContract(wagmiConfig, {
       address: DEPLOYED_CONTRACT as `0x${string}`,
       abi: CONTRACT_ABI,
       functionName: 'vote',
       args: [userAddress as `0x${string}`, BigInt(marketId), voteYes],
-      value: voteCost, // This triggers MetaMask payment popup
+      value: voteCost,
     });
 
     console.log("Vote transaction submitted:", hash);
@@ -130,21 +129,46 @@ export const investInTemplate = async (
 
     console.log("Vote confirmed:", receipt);
 
+    // **NEW: Track the vote in our database**
+    try {
+      await fetch(`${API_ROUTE}/api/user-vote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userAddress,
+          marketId,
+          vote: voteYes ? 'funny' : 'lame',
+          transactionHash: hash
+        })
+      });
+      
+      console.log("Vote tracked in database");
+    } catch (trackingError) {
+      console.warn("Failed to track vote in database:", trackingError);
+      // Don't fail the whole transaction for tracking errors
+    }
+
+    // **NEW: Store vote locally as well (backup)**
+    localStorage.setItem(`user_vote_${userAddress}_${marketId}`, voteYes ? 'funny' : 'lame');
+    localStorage.setItem(`vote_tx_${userAddress}_${marketId}`, hash);
+
     return {
       success: true,
       data: {
         transactionHash: hash,
         blockNumber: receipt.blockNumber,
         gasUsed: receipt.gasUsed,
-        status: receipt.status
+        status: receipt.status,
+        vote: voteYes ? 'funny' : 'lame'
       },
     };
   } catch (error) {
     console.error("Error voting:", error);
     
-    // Enhanced error handling
+    // Enhanced error handling (existing code)
     if (error instanceof Error) {
-      // Handle specific wagmi/MetaMask errors
       if (error.message.includes('User rejected') || 
           error.message.includes('rejected') ||
           error.message.includes('denied')) {
@@ -162,26 +186,10 @@ export const investInTemplate = async (
         };
       }
       
-      if (error.message.includes('network') ||
-          error.message.includes('connection')) {
-        return {
-          success: false,
-          error: "Network connection error. Please try again.",
-        };
-      }
-      
-      if (error.message.includes('nonce')) {
-        return {
-          success: false,
-          error: "Transaction nonce error. Please refresh and try again.",
-        };
-      }
-      
-      // Handle contract-specific errors
       if (error.message.includes('execution reverted')) {
         return {
           success: false,
-          error: "Transaction failed: Contract execution reverted. You may have already voted or the market may be closed.",
+          error: "Transaction failed: You may have already voted or the market may be closed.",
         };
       }
       
@@ -194,6 +202,107 @@ export const investInTemplate = async (
     return {
       success: false,
       error: "Voting failed due to unknown error",
+    };
+  }
+};
+
+// **NEW: Function to get user's voting history**
+export const getUserVotingHistory = async (userAddress: string): Promise<ApiResponse> => {
+  try {
+    const response = await fetch(`${API_ROUTE}/api/user-votes/${userAddress}`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch voting history');
+    }
+    
+    const data = await response.json();
+    
+    return {
+      success: true,
+      data
+    };
+  } catch (error) {
+    console.error('Error fetching voting history:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+};
+
+// **NEW: Function to get user's settlement history**
+export const getUserSettlements = async (userAddress: string): Promise<ApiResponse> => {
+  try {
+    const response = await fetch(`${API_ROUTE}/api/user-settlements/${userAddress}`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch settlement history');
+    }
+    
+    const data = await response.json();
+    
+    return {
+      success: true,
+      data
+    };
+  } catch (error) {
+    console.error('Error fetching settlement history:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+};
+
+// **NEW: Function to get settlement status for a market**
+export const getSettlementStatus = async (marketId: number): Promise<ApiResponse> => {
+  try {
+    const response = await fetch(`${API_ROUTE}/api/settlement-status/${marketId}`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch settlement status');
+    }
+    
+    const data = await response.json();
+    
+    return {
+      success: true,
+      data
+    };
+  } catch (error) {
+    console.error('Error fetching settlement status:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+};
+
+// **NEW: Function to manually trigger settlement (admin)**
+export const manualSettle = async (marketId: number): Promise<ApiResponse> => {
+  try {
+    const response = await fetch(`${API_ROUTE}/api/manual-settle/${marketId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to trigger settlement');
+    }
+    
+    const data = await response.json();
+    
+    return {
+      success: true,
+      data
+    };
+  } catch (error) {
+    console.error('Error triggering settlement:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 };

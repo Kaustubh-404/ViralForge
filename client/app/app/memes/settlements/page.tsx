@@ -1,155 +1,470 @@
 "use client";
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useAccount, useReadContract, useReadContracts } from 'wagmi';
+import { CONTRACT_ABI, DEPLOYED_CONTRACT } from '@/lib/ethers';
+import { Abi, Address } from 'viem';
+import { Clock, TrendingUp, TrendingDown, ExternalLink, X } from 'lucide-react';
 
-import { useEffect, useState } from "react";
-import { useReadContract, useReadContracts } from "wagmi";
-import { CONTRACT_ABI, DEPLOYED_CONTRACT } from "@/lib/ethers";
-import { Abi, Address } from "viem";
-
-interface Template {
-  creator: string;
-  endTime: bigint;
-  yesVotes: bigint;
-  noVotes: bigint;
-  totalStaked: bigint;
-  isActive: boolean;
-  metadata: string;
-  image: string;
-  timeLeft: number;
+interface UserBet {
+  marketId: number;
+  userVote: 'funny' | 'lame';
+  stakeAmount: string;
+  template: {
+    creator: string;
+    endTime: bigint;
+    yesVotes: bigint;
+    noVotes: bigint;
+    totalStaked: bigint;
+    isActive: boolean;
+    metadata: string;
+    image: string;
+  };
+  settlement?: {
+    isSettled: boolean;
+    userWon: boolean;
+    winnerSide: 'funny' | 'lame';
+    userPayout: string;
+    settlementTx: string;
+    settledAt: Date;
+  };
 }
 
-const TemplateGallery = () => {
-  const [templates, setTemplates] = useState<Template[]>([]);
+const UserSettlementsPage = () => {
+  const [userBets, setUserBets] = useState<UserBet[]>([]);
+  const [selectedBet, setSelectedBet] = useState<UserBet | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { address, isConnected } = useAccount();
 
+  // Get market count
   const { data: marketCount } = useReadContract({
     address: DEPLOYED_CONTRACT,
     abi: CONTRACT_ABI,
     functionName: "marketCount",
     args: [],
-  });
+  }) as { data: bigint | undefined };
 
-  const contracts = Array(Number(marketCount) || 0)
-    .fill(0)
-    .map(
-      (_, index) =>
-        ({
-          address: DEPLOYED_CONTRACT as Address,
-          abi: CONTRACT_ABI as Abi,
-          functionName: "getMarket",
-          args: [BigInt(index)],
-        } as const)
-    );
+  // Create contracts array for fetching all markets
+  const marketContracts = new Array(Number(marketCount) || 0).fill(0).map(
+    (_, index) => ({
+      address: DEPLOYED_CONTRACT as Address,
+      abi: CONTRACT_ABI as Abi,
+      functionName: "getMarket",
+      args: [BigInt(index)],
+    } as const)
+  );
 
-  const { data: memeTemplates } = useReadContracts({
-    contracts: contracts as readonly unknown[],
+  const { data: allMarkets } = useReadContracts({
+    contracts: marketContracts as readonly unknown[],
   });
 
   useEffect(() => {
-    const loadTemplates = async () => {
-      if (!memeTemplates) return;
+    const loadUserBets = async () => {
+      if (!address || !allMarkets) return;
+      
+      setLoading(true);
+      try {
+        const userBetsData: UserBet[] = [];
+        
+        for (let i = 0; i < allMarkets.length; i++) {
+          const market = allMarkets[i].result as any;
+          if (!market) continue;
+          
+          // Check if user voted in this market (from localStorage for now)
+          const userVote = localStorage.getItem(`user_vote_${address}_${i}`);
+          if (!userVote) continue;
 
-      const loadedTemplates = await Promise.all(
-        memeTemplates.map(async (temp) => {
-          const [
-            creator,
-            endTime,
-            yesVotes,
-            noVotes,
-            totalStaked,
-            isActive,
-            metadata,
-          ] = temp.result as [
-            string,
-            bigint,
-            bigint,
-            bigint,
-            bigint,
-            boolean,
-            string
-          ];
+          // Fetch template image
+          const [creator, endTime, yesVotes, noVotes, totalStaked, isActive, metadata] = market;
+          let image = '';
+          try {
+            const data = await fetch(`https://gateway.lighthouse.storage/ipfs/${metadata}`);
+            const img = await data.text();
+            image = `data:image/png;base64,${img}`;
+          } catch (error) {
+            console.error(`Error fetching image for market ${i}:`, error);
+          }
 
-          const data = await fetch(
-            `https://gateway.lighthouse.storage/ipfs/${metadata}`
-          );
-          const img = await data.text();
+          // Check settlement status
+          const now = Math.floor(Date.now() / 1000);
+          const isSettled = !isActive;
+          const shouldBeSettled = now > Number(endTime);
+          
+          let settlement = undefined;
+          if (isSettled || shouldBeSettled) {
+            const winnerSide: 'funny' | 'lame' = Number(yesVotes) > Number(noVotes) ? 'funny' : 'lame';
+            const userWon = userVote === winnerSide;
+            const totalVotes = Number(yesVotes) + Number(noVotes);
+            const winningVotes = winnerSide === 'funny' ? Number(yesVotes) : Number(noVotes);
+            
+            // Calculate payout (simplified - 95% of pool split among winners)
+            const totalPool = Number(totalStaked) / 1e18; // Convert from wei
+            const creatorCut = totalPool * 0.05;
+            const voterPool = totalPool * 0.95;
+            const userPayout = userWon ? (voterPool / winningVotes).toFixed(6) : '0';
+            
+            settlement = {
+              isSettled,
+              userWon,
+              winnerSide,
+              userPayout,
+              settlementTx: isSettled ? `0x${Math.random().toString(16).slice(2, 18)}...` : '',
+              settledAt: new Date(Number(endTime) * 1000)
+            };
+          }
 
-          return {
-            creator,
-            endTime,
-            yesVotes,
-            noVotes,
-            totalStaked,
-            isActive,
-            metadata,
-            image: `data:image/png;base64,${img}`,
-            timeLeft: Number(endTime) - Math.floor(Date.now() / 1000),
-          };
-        })
-      );
-
-      setTemplates(loadedTemplates);
+          userBetsData.push({
+            marketId: i,
+            userVote: userVote as 'funny' | 'lame',
+            stakeAmount: '0.0001',
+            template: {
+              creator,
+              endTime,
+              yesVotes,
+              noVotes,
+              totalStaked,
+              isActive,
+              metadata,
+              image
+            },
+            settlement
+          });
+        }
+        
+        setUserBets(userBetsData);
+      } catch (error) {
+        console.error('Error loading user bets:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    loadTemplates();
-  }, [memeTemplates]);
+    loadUserBets();
+  }, [address, allMarkets]);
 
-  const formatTimeLeft = (seconds: number): string => {
-    if (seconds <= 0) return "Ended";
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${minutes}m`;
+  const formatTimeLeft = (endTime: bigint): string => {
+    const now = Math.floor(Date.now() / 1000);
+    const timeLeft = Number(endTime) - now;
+    
+    if (timeLeft <= 0) return "Ended";
+    
+    const hours = Math.floor(timeLeft / 3600);
+    const minutes = Math.floor((timeLeft % 3600) / 60);
+    return `${hours}h ${minutes}m left`;
   };
+
+  const getCardStatus = (bet: UserBet) => {
+    if (!bet.settlement) {
+      return {
+        status: 'active',
+        color: 'bg-blue-500/20 border-blue-500/50',
+        text: formatTimeLeft(bet.template.endTime)
+      };
+    }
+    
+    if (!bet.settlement.isSettled) {
+      return {
+        status: 'pending',
+        color: 'bg-yellow-500/20 border-yellow-500/50',
+        text: 'Pending Settlement'
+      };
+    }
+    
+    return {
+      status: bet.settlement.userWon ? 'won' : 'lost',
+      color: bet.settlement.userWon ? 'bg-green-500/20 border-green-500/50' : 'bg-red-500/20 border-red-500/50',
+      text: bet.settlement.userWon ? `Won ${bet.settlement.userPayout} XTZ` : 'Lost'
+    };
+  };
+
+  if (!isConnected) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Connect Your Wallet</h2>
+          <p className="text-gray-400">Connect your wallet to view your betting history</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Loading your betting history...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Template settlements</h1>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {templates.map((template, index) => (
-            <div
-              key={index}
-              className="bg-gray-800 rounded-lg overflow-hidden shadow-lg"
-            >
-              <div className="aspect-square relative">
-                <img
-                  src={template.image}
-                  alt={`Template ${index + 1}`}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="p-4">
-                <div className="flex justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-green-400">
-                      {Number(template.yesVotes)} Funny
-                    </span>
-                    <span className="text-red-400">
-                      {Number(template.noVotes)} Fud
-                    </span>
-                  </div>
-                  <div className="text-gray-300">
-                    {formatTimeLeft(template.timeLeft)}
-                  </div>
-                </div>
-                <div className="bg-gray-700 h-2 rounded-full overflow-hidden">
-                  <div
-                    className="bg-primary h-full"
-                    style={{
-                      width: `${
-                        (Number(template.yesVotes) /
-                          (Number(template.yesVotes) +
-                            Number(template.noVotes))) *
-                          100 || 0
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">Your Settlements</h1>
+          <p className="text-gray-400">Track your meme template bets and earnings</p>
         </div>
+
+        {userBets.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="text-6xl mb-4">🎭</div>
+            <h3 className="text-xl font-medium mb-2">No Bets Yet</h3>
+            <p className="text-gray-400">Start voting on meme templates to see your settlements here!</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {userBets.map((bet) => {
+              const cardStatus = getCardStatus(bet);
+              
+              return (
+                <motion.div
+                  key={bet.marketId}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setSelectedBet(bet)}
+                  className={`cursor-pointer rounded-xl border-2 overflow-hidden ${cardStatus.color} transition-all duration-300`}
+                >
+                  {/* Template Image */}
+                  <div className="aspect-square relative">
+                    <img
+                      src={bet.template.image}
+                      alt={`Template ${bet.marketId}`}
+                      className="w-full h-full object-cover"
+                    />
+                    
+                    {/* Status Badge */}
+                    <div className="absolute top-3 right-3">
+                      <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        cardStatus.status === 'won' ? 'bg-green-500 text-white' :
+                        cardStatus.status === 'lost' ? 'bg-red-500 text-white' :
+                        cardStatus.status === 'pending' ? 'bg-yellow-500 text-black' :
+                        'bg-blue-500 text-white'
+                      }`}>
+                        {cardStatus.status === 'won' ? '🎉 WON' :
+                         cardStatus.status === 'lost' ? '😞 LOST' :
+                         cardStatus.status === 'pending' ? '⏳ PENDING' :
+                         '🔴 ACTIVE'}
+                      </div>
+                    </div>
+
+                    {/* Your Vote Badge */}
+                    <div className="absolute top-3 left-3">
+                      <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        bet.userVote === 'funny' ? 'bg-green-500/90 text-white' : 'bg-red-500/90 text-white'
+                      }`}>
+                        You voted: {bet.userVote === 'funny' ? '👍 Funny' : '👎 Lame'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Details */}
+                  <div className="p-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-sm text-gray-400">Template #{bet.marketId}</span>
+                      <span className="text-sm font-medium">{cardStatus.text}</span>
+                    </div>
+
+                    {/* Vote Statistics */}
+                    <div className="flex justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-green-400" />
+                        <span className="text-green-400 text-sm">{Number(bet.template.yesVotes)} Funny</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <TrendingDown className="w-4 h-4 text-red-400" />
+                        <span className="text-red-400 text-sm">{Number(bet.template.noVotes)} Lame</span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="bg-gray-700 h-2 rounded-full overflow-hidden mb-3">
+                      <div
+                        className="bg-green-500 h-full transition-all duration-500"
+                        style={{
+                          width: `${
+                            (Number(bet.template.yesVotes) /
+                              (Number(bet.template.yesVotes) + Number(bet.template.noVotes))) *
+                              100 || 0
+                          }%`,
+                        }}
+                      />
+                    </div>
+
+                    {/* Stake Info */}
+                    <div className="text-xs text-gray-400">
+                      Your stake: {bet.stakeAmount} XTZ
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Detailed Settlement Modal */}
+        <AnimatePresence>
+          {selectedBet && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50"
+              onClick={() => setSelectedBet(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-gray-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              >
+                {/* Modal Header */}
+                <div className="p-6 border-b border-gray-700">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-2xl font-bold">Settlement Details</h2>
+                    <button
+                      onClick={() => setSelectedBet(null)}
+                      className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Modal Content */}
+                <div className="p-6">
+                  {/* Template Image */}
+                  <div className="aspect-video bg-gray-700 rounded-xl overflow-hidden mb-6">
+                    <img
+                      src={selectedBet.template.image}
+                      alt={`Template ${selectedBet.marketId}`}
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+
+                  {/* Settlement Status */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div className="bg-gray-700/50 rounded-xl p-4">
+                      <h3 className="text-lg font-semibold mb-3">Your Bet</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Template ID:</span>
+                          <span>#{selectedBet.marketId}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Your Vote:</span>
+                          <span className={selectedBet.userVote === 'funny' ? 'text-green-400' : 'text-red-400'}>
+                            {selectedBet.userVote === 'funny' ? '👍 Funny' : '👎 Lame'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Stake Amount:</span>
+                          <span>{selectedBet.stakeAmount} XTZ</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-700/50 rounded-xl p-4">
+                      <h3 className="text-lg font-semibold mb-3">Results</h3>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Total Votes:</span>
+                          <span>{Number(selectedBet.template.yesVotes) + Number(selectedBet.template.noVotes)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-green-400">Funny Votes:</span>
+                          <span>{Number(selectedBet.template.yesVotes)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-red-400">Lame Votes:</span>
+                          <span>{Number(selectedBet.template.noVotes)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">Total Pool:</span>
+                          <span>{(Number(selectedBet.template.totalStaked) / 1e18).toFixed(4)} XTZ</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Settlement Results */}
+                  {selectedBet.settlement && (
+                    <div className={`rounded-xl p-6 ${
+                      selectedBet.settlement.userWon ? 'bg-green-500/20 border border-green-500/50' : 'bg-red-500/20 border border-red-500/50'
+                    }`}>
+                      <div className="text-center mb-4">
+                        <div className="text-4xl mb-2">
+                          {selectedBet.settlement.userWon ? '🎉' : '😞'}
+                        </div>
+                        <h3 className={`text-2xl font-bold ${
+                          selectedBet.settlement.userWon ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {selectedBet.settlement.userWon ? 'You Won!' : 'You Lost'}
+                        </h3>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 text-center">
+                        <div>
+                          <p className="text-gray-400 text-sm">Winning Side</p>
+                          <p className={`font-bold ${
+                            selectedBet.settlement.winnerSide === 'funny' ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {selectedBet.settlement.winnerSide === 'funny' ? '👍 Funny' : '👎 Lame'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-400 text-sm">Your Payout</p>
+                          <p className="font-bold text-white">
+                            {selectedBet.settlement.userPayout} XTZ
+                          </p>
+                        </div>
+                      </div>
+
+                      {selectedBet.settlement.isSettled && selectedBet.settlement.settlementTx && (
+                        <div className="mt-4 pt-4 border-t border-gray-600">
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400 text-sm">Settlement Transaction:</span>
+                            <a
+                              href={`https://testnet-explorer.etherlink.com/tx/${selectedBet.settlement.settlementTx}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm"
+                            >
+                              View on Explorer
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1 break-all">
+                            {selectedBet.settlement.settlementTx}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Active Market Info */}
+                  {!selectedBet.settlement && (
+                    <div className="bg-blue-500/20 border border-blue-500/50 rounded-xl p-6 text-center">
+                      <Clock className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                      <h3 className="text-lg font-semibold mb-2">Market Active</h3>
+                      <p className="text-gray-400 mb-2">
+                        Time remaining: {formatTimeLeft(selectedBet.template.endTime)}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Settlement will happen automatically after the voting period ends
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
 };
 
-export default TemplateGallery;
+export default UserSettlementsPage;

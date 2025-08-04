@@ -12,7 +12,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 const API_ROUTE =
-  process.env.NEXT_PUBLIC_PROD == "False" ? "http://localhost:5000" :"https://FunnyOrFud.onrender.com";
+  process.env.NEXT_PUBLIC_PROD == "False" ? "http://localhost:5000" :"https://ViralForge.onrender.com";
 
 // lib/api.ts
 interface MemeData {

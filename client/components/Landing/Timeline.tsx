@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 export function TimelineDemo() {
   const data = [
     {
-      title: "Q1 2024 - Genesis",
+      title: "Q1 2025 - Genesis",
       content: (
         <div className="space-y-4">
           <motion.div 
@@ -40,7 +40,7 @@ export function TimelineDemo() {
       ),
     },
     {
-      title: "Q2 2024 - Evolution",
+      title: "Q2 2025 - Evolution",
       content: (
         <div className="space-y-4">
           <motion.div 
@@ -75,7 +75,7 @@ export function TimelineDemo() {
       ),
     },
     {
-      title: "Q3 2024 - Expansion",
+      title: "Q3 2025 - Expansion",
       content: (
         <div className="space-y-4">
           <motion.div 

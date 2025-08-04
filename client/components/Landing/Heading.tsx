@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 const AnimatedHeading = () => {
-  const text = "FunnyOrFud";
+  const text = "ViralForge";
 
   const containerVariants = {
     hidden: { 

@@ -427,7 +427,7 @@ const UserSettlementsPage = () => {
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 text-sm">Settlement Transaction:</span>
                             <a
-                              href={`https://testnet-explorer.etherlink.com/tx/${selectedBet.settlement.settlementTx}`}
+                              href={`https://testnet.explorer.etherlink.com/tx/${selectedBet.settlement.settlementTx}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm"

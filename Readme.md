@@ -1,4 +1,5 @@
 ```markdown
+```
 # 🎭 ViralForge - Where Memes Meet Web3 Economics
 
 [![YouTube Demo](https://img.shields.io/badge/YouTube-Demo-red?style=for-the-badge&logo=youtube)](https://youtu.be/RuDiHXnxoms?feature=shared)
@@ -81,7 +82,7 @@
 
 ## 🏗️ Architecture
 
-```mermaid
+```mermaid```
 graph TB
     A[Web Frontend - Next.js] --> B[Backend API - Express.js]
     C[Telegram Mini App] --> B

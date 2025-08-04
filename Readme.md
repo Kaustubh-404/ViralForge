@@ -95,7 +95,7 @@ graph TB
     C --> J[TON Wallet / Telegram Wallet]
     B --> K[Settlement Tracking]
     L[Cron Jobs] --> G
-```
+
 
 ## 🚀 Quick Start
 
@@ -276,7 +276,7 @@ viralforge/
     ├── model.js             # Main database models
     ├── server.js            # Main server file
     └── FunnyOrFud.json      # Smart contract ABI
-```
+
 
 ## 🎯 How It Works
 
@@ -325,7 +325,6 @@ function vote(address userAddress, uint256 marketId, bool voteYes) external paya
 
 // Settle market and distribute rewards
 function releaseRewards(uint256 marketId) external
-```
 
 ### Contract Features
 - **Vote Cost**: 0.0001 XTZ per vote
@@ -472,4 +471,3 @@ NEXT_PUBLIC_SPLINE="your_spline_scene_id"
 ```
 
 
-```

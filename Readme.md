@@ -1,16 +1,16 @@
-```markdown
-```
 # 🎭 ViralForge - Where Memes Meet Web3 Economics
 
 [![YouTube Demo](https://img.shields.io/badge/YouTube-Demo-red?style=for-the-badge&logo=youtube)](https://youtu.be/RuDiHXnxoms?feature=shared)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
-[![Built with](https://img.shields.io/badge/Built%20with-Next.js-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
-[![Blockchain](https://img.shields.io/badge/Blockchain-Etherlink-purple?style=for-the-badge)](https://etherlink.com/)
-[![Mobile](https://img.shields.io/badge/Mobile-Mini%20App-green?style=for-the-badge)](https://t.me/ViralForgeBot)
 
-> **The first web3 platform bringing financial value to meme creation and curation. Create, vote, and earn from the internet's favorite content while building a true community around humor.**
-> 
+**The first web3 platform bringing financial value to meme creation and curation. Create, vote, and earn from the internet's favorite content while building a true community around humor.**
+
 > **🚀 Available as both Web App and Telegram Mini App!**
+
+## 🌐 Live Demo
+
+**🔗 [Visit ViralForge](https://viral-forge-frontend.vercel.app/)**
+
+Experience the full platform live at our deployed web application!
 
 ## 🎬 Demo Video
 
@@ -21,7 +21,7 @@
 ## 📱 Platform Availability
 
 ### 🌐 Web Application
-- **URL**: [https://viralforge.vercel.app](https://viralforge.vercel.app)
+- **URL**: [https://viral-forge-frontend.vercel.app/](https://viral-forge-frontend.vercel.app/)
 - **Features**: Full desktop and mobile web experience
 - **Wallet**: MetaMask integration
 - **Responsive**: Works on all screen sizes
@@ -76,7 +76,7 @@
 
 ## 🏗️ Architecture
 
-```mermaid```
+```mermaid
 graph TB
     A[Web Frontend - Next.js] --> B[Backend API - Express.js]
     C[Telegram Mini App] --> B
@@ -90,7 +90,7 @@ graph TB
     C --> J[TON Wallet / Telegram Wallet]
     B --> K[Settlement Tracking]
     L[Cron Jobs] --> G
-
+```
 
 ## 🚀 Quick Start
 
@@ -102,6 +102,7 @@ graph TB
 - Lighthouse API key for IPFS
 
 ### 1-Minute Setup
+
 Clone the repository:
 ```bash
 git clone https://github.com/your-username/viralforge.git
@@ -271,7 +272,7 @@ viralforge/
     ├── model.js             # Main database models
     ├── server.js            # Main server file
     └── FunnyOrFud.json      # Smart contract ABI
-
+```
 
 ## 🎯 How It Works
 
@@ -320,6 +321,7 @@ function vote(address userAddress, uint256 marketId, bool voteYes) external paya
 
 // Settle market and distribute rewards
 function releaseRewards(uint256 marketId) external
+```
 
 ### Contract Features
 - **Vote Cost**: 0.0001 XTZ per vote
@@ -465,4 +467,20 @@ NEXT_PUBLIC_PROD=False
 NEXT_PUBLIC_SPLINE="your_spline_scene_id"
 ```
 
+---
 
+## 🤝 Contributing
+
+We welcome contributions! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🙋‍♂️ Support
+
+For support, please open an issue on GitHub or contact us through our social channels.
+
+---
+
+*Built with ❤️ for the meme community*

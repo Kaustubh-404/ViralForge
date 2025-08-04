@@ -26,12 +26,6 @@
 - **Wallet**: MetaMask integration
 - **Responsive**: Works on all screen sizes
 
-### 📲 Telegram Mini App
-- **Bot**: [@ViralForgeBot](https://t.me/ViralForgeBot)
-- **Features**: Native Telegram integration
-- **Wallet**: TON Wallet & Telegram Wallet
-- **Convenience**: Access directly within Telegram chat
-
 *Experience the same powerful meme creation and voting platform in both formats!*
 
 ## 📋 Table of Contents
@@ -201,7 +195,7 @@ MONGODB_URI="mongodb+srv://kaustubh2003:khp2003@cluster0meme.jzbogdy.mongodb.net
 
 # Blockchain Configuration
 RPC_URL="https://node.ghostnet.etherlink.com"
-PRIVATE_KEY="6197dd5d86e3d18879689735dd11351347e1e8e14edf09ff27c148fc16f198b9"
+PRIVATE_KEY="Deployer's Private key"
 
 # Server Configuration
 PORT=5000

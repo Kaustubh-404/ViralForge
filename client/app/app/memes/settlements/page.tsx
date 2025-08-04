@@ -66,12 +66,78 @@ const UserSettlementsPage = () => {
       try {
         const userBetsData: UserBet[] = [];
         
+        // First, try to get user votes from the database (most reliable)
+        let userVotesFromDB: any[] = [];
+        try {
+          const API_ROUTE = process.env.NEXT_PUBLIC_PROD === "False" ? "http://localhost:5000" : "https://ViralForge.onrender.com";
+          const votesResponse = await fetch(`${API_ROUTE}/api/user-votes/${address}`);
+          if (votesResponse.ok) {
+            userVotesFromDB = await votesResponse.json();
+            console.log(`📊 Found ${userVotesFromDB.length} votes in database for user ${address}`);
+          }
+        } catch (error) {
+          console.log("Could not fetch votes from database, falling back to localStorage:", error);
+        }
+        
         for (let i = 0; i < allMarkets.length; i++) {
           const market = allMarkets[i].result as any;
           if (!market) continue;
           
-          // Check if user voted in this market (from localStorage for now)
-          const userVote = localStorage.getItem(`user_vote_${address}_${i}`);
+          // Check if user voted in this market
+          let userVote = null;
+          
+          // First, check database
+          const dbVote = userVotesFromDB.find(vote => vote.marketId === i);
+          if (dbVote) {
+            userVote = dbVote.vote;
+            console.log(`✅ Found vote for market ${i} from database: ${userVote}`);
+          }
+          
+          // If not in database, check localStorage patterns
+          if (!userVote) {
+            // Check old pattern
+            userVote = localStorage.getItem(`user_vote_${address}_${i}`);
+            
+            // Check new meme-specific patterns
+            if (!userVote) {
+              try {
+                const API_ROUTE = process.env.NEXT_PUBLIC_PROD === "False" ? "http://localhost:5000" : "https://ViralForge.onrender.com";
+                const memeResponse = await fetch(`${API_ROUTE}/api/memes/${i}`);
+                if (memeResponse.ok) {
+                  const memesData = await memeResponse.json();
+                  if (memesData && memesData.length > 0) {
+                    // Check if user voted on any meme in this market
+                    for (const meme of memesData) {
+                      const memeVote = localStorage.getItem(`user_vote_${address}_meme_${meme.cid}`);
+                      const simpleMemeVote = localStorage.getItem(`voted_meme_${meme.cid}`);
+                      
+                      if (memeVote || simpleMemeVote) {
+                        userVote = memeVote || 'funny'; // Default to funny if simple vote found
+                        console.log(`✅ Found vote for market ${i} from localStorage: ${userVote}`);
+                        break;
+                      }
+                    }
+                  }
+                }
+              } catch (error) {
+                console.log(`Could not fetch memes for market ${i}:`, error);
+              }
+            }
+            
+            // Still no vote found? Check for any keys related to this user and market
+            if (!userVote) {
+              const allKeys = Object.keys(localStorage);
+              const marketVoteKey = allKeys.find(key => 
+                key.includes(`user_vote_${address}`) && 
+                (key.includes(`_${i}`) || key.includes(`_meme_`))
+              );
+              if (marketVoteKey) {
+                userVote = localStorage.getItem(marketVoteKey);
+                console.log(`✅ Found vote for market ${i} from localStorage fallback: ${userVote}`);
+              }
+            }
+          }
+          
           if (!userVote) continue;
 
           // Fetch template image
@@ -85,31 +151,66 @@ const UserSettlementsPage = () => {
             console.error(`Error fetching image for market ${i}:`, error);
           }
 
-          // Check settlement status
+          // Check settlement status - try to get real settlement data from database
           const now = Math.floor(Date.now() / 1000);
           const isSettled = !isActive;
           const shouldBeSettled = now > Number(endTime);
           
           let settlement = undefined;
           if (isSettled || shouldBeSettled) {
+            // Try to fetch real settlement data from database
+            let realSettlement = null;
+            try {
+              const API_ROUTE = process.env.NEXT_PUBLIC_PROD === "False" ? "http://localhost:5000" : "https://ViralForge.onrender.com";
+              const settlementResponse = await fetch(`${API_ROUTE}/api/settlement/${i}`);
+              if (settlementResponse.ok) {
+                realSettlement = await settlementResponse.json();
+                console.log(`💾 Found real settlement data for market ${i}:`, realSettlement);
+              }
+            } catch (error) {
+              console.log(`Could not fetch settlement data for market ${i}:`, error);
+            }
+            
             const winnerSide: 'funny' | 'lame' = Number(yesVotes) > Number(noVotes) ? 'funny' : 'lame';
             const userWon = userVote === winnerSide;
-            const totalVotes = Number(yesVotes) + Number(noVotes);
-            const winningVotes = winnerSide === 'funny' ? Number(yesVotes) : Number(noVotes);
             
-            // Calculate payout (simplified - 95% of pool split among winners)
-            const totalPool = Number(totalStaked) / 1e18; // Convert from wei
-            const creatorCut = totalPool * 0.05;
-            const voterPool = totalPool * 0.95;
-            const userPayout = userWon ? (voterPool / winningVotes).toFixed(6) : '0';
+            let userPayout = '0';
+            let settlementTx = '';
+            let settledAt = new Date(Number(endTime) * 1000);
+            
+            if (realSettlement) {
+              // Use real settlement data
+              const userParticipation = realSettlement.participants?.find((p: any) => p.address.toLowerCase() === address.toLowerCase());
+              if (userParticipation) {
+                userPayout = userParticipation.won ? (Number(userParticipation.payout) / 1e18).toFixed(6) : '0';
+              } else {
+                // Calculate estimated payout if user not in participants yet
+                const totalVotes = Number(yesVotes) + Number(noVotes);
+                const winningVotes = winnerSide === 'funny' ? Number(yesVotes) : Number(noVotes);
+                const totalPool = Number(totalStaked) / 1e18;
+                const voterPool = totalPool * 0.95;
+                userPayout = userWon && winningVotes > 0 ? (voterPool / winningVotes).toFixed(6) : '0';
+              }
+              
+              settlementTx = realSettlement.settlementTx;
+              settledAt = new Date(realSettlement.settledAt);
+            } else {
+              // Fallback to calculated payout
+              const totalVotes = Number(yesVotes) + Number(noVotes);
+              const winningVotes = winnerSide === 'funny' ? Number(yesVotes) : Number(noVotes);
+              const totalPool = Number(totalStaked) / 1e18;
+              const voterPool = totalPool * 0.95;
+              userPayout = userWon && winningVotes > 0 ? (voterPool / winningVotes).toFixed(6) : '0';
+              settlementTx = isSettled ? 'Pending transaction data...' : '';
+            }
             
             settlement = {
               isSettled,
               userWon,
               winnerSide,
               userPayout,
-              settlementTx: isSettled ? `0x${Math.random().toString(16).slice(2, 18)}...` : '',
-              settledAt: new Date(Number(endTime) * 1000)
+              settlementTx,
+              settledAt
             };
           }
 
@@ -129,6 +230,36 @@ const UserSettlementsPage = () => {
             },
             settlement
           });
+        }
+        
+        // Add mock demo card only for specific wallet (demo purposes)
+        if (address?.toLowerCase() === '0xebc99e8a6fad706af50b68463acf9bf550a54ab7') {
+          const mockBet: UserBet = {
+            marketId: 999, // Use high number to avoid conflicts
+            userVote: 'funny',
+            stakeAmount: '0.0001',
+            template: {
+              creator: '0xDemo123...',
+              endTime: BigInt(Math.floor(Date.now() / 1000) - 3600), // 1 hour ago
+              yesVotes: BigInt(15),
+              noVotes: BigInt(8),
+              totalStaked: BigInt('2300000000000000'), // 0.0023 XTZ in wei
+              isActive: false,
+              metadata: 'Demo Template',
+              image: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400&h=400&fit=crop&crop=focalpoint&fp-x=0.5&fp-y=0.5'
+            },
+            settlement: {
+              isSettled: true,
+              userWon: true,
+              winnerSide: 'funny',
+              userPayout: '0.001457',
+              settlementTx: '0x543862bb4e6b8e0403fbf665f70bce6f4f73adf504581dc078f76efef1dd5a48',
+              settledAt: new Date(Date.now() - 1800000) // 30 minutes ago
+            }
+          };
+          
+          // Add mock bet at the beginning for demo visibility
+          userBetsData.unshift(mockBet);
         }
         
         setUserBets(userBetsData);
@@ -422,23 +553,45 @@ const UserSettlementsPage = () => {
                         </div>
                       </div>
 
-                      {selectedBet.settlement.isSettled && selectedBet.settlement.settlementTx && (
+                      {selectedBet.settlement?.isSettled && selectedBet.settlement?.settlementTx && (
                         <div className="mt-4 pt-4 border-t border-gray-600">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between mb-2">
                             <span className="text-gray-400 text-sm">Settlement Transaction:</span>
-                            <a
-                              href={`https://testnet.explorer.etherlink.com/tx/${selectedBet.settlement.settlementTx}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm"
-                            >
-                              View on Explorer
-                              <ExternalLink className="w-4 h-4" />
-                            </a>
+                            {selectedBet.settlement?.settlementTx?.startsWith('0x') && selectedBet.settlement.settlementTx.length > 20 ? (
+                              <a
+                                href={`https://testnet.explorer.etherlink.com/tx/${selectedBet.settlement.settlementTx}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-sm"
+                              >
+                                View on Explorer
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
+                            ) : (
+                              <span className="text-yellow-400 text-sm">
+                                {selectedBet.settlement?.settlementTx}
+                              </span>
+                            )}
                           </div>
-                          <p className="text-xs text-gray-500 mt-1 break-all">
-                            {selectedBet.settlement.settlementTx}
-                          </p>
+                          {selectedBet.settlement?.settlementTx?.startsWith('0x') && selectedBet.settlement.settlementTx.length > 20 ? (
+                            <div className="bg-gray-700/50 rounded-lg p-3">
+                              <p className="text-xs text-gray-300 font-mono break-all">
+                                {selectedBet.settlement.settlementTx}
+                              </p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(selectedBet.settlement?.settlementTx || '')}
+                                  className="text-xs text-blue-400 hover:text-blue-300"
+                                >
+                                  📋 Copy Transaction ID
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-gray-500 italic">
+                              Transaction data will be available once settlement is processed
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>

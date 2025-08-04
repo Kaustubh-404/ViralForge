@@ -8,7 +8,7 @@ class AutoSettlementService {
     constructor() {
         this.provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
         this.relayerWallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
-        this.contractAddress = "0xd16Da71C739Bf59E919De5f179809F47093528DD";
+        this.contractAddress = "0x8045d6B10716F5Ea2c425409e106a619a08ba15D";
         this.contract = new Contract(this.contractAddress, CONTRACT.abi, this.relayerWallet);
         this.isRunning = false;
     }

@@ -62,11 +62,14 @@ const MemeView = () => {
   const voteCost = parseEther("0.0001");
   const hasEnoughBalance = balance && balance.value >= voteCost;
 
-  // Check if user has already voted on this template
+  // Check if user has already voted on this specific meme
   useEffect(() => {
-    const voted = localStorage.getItem(`voted_template_${templateId}`);
-    setHasVoted(!!voted);
-  }, [templateId]);
+    if (memes.length > 0 && currentIndex < memes.length) {
+      const currentMeme = memes[currentIndex];
+      const voted = localStorage.getItem(`voted_meme_${currentMeme.cid}`);
+      setHasVoted(!!voted);
+    }
+  }, [templateId, currentIndex, memes]);
 
   // Get market count
   const { data: marketCount } = useReadContract({
@@ -247,12 +250,28 @@ const MemeView = () => {
   // Navigation functions
   const goToPrevious = () => {
     setDirection(-1);
-    setCurrentIndex((prev) => (prev - 1 + memes.length) % memes.length);
+    const prevIndex = (currentIndex - 1 + memes.length) % memes.length;
+    setCurrentIndex(prevIndex);
+    
+    // Update voting status for the new meme
+    const prevMeme = memes[prevIndex];
+    if (prevMeme) {
+      const voted = localStorage.getItem(`voted_meme_${prevMeme.cid}`);
+      setHasVoted(!!voted);
+    }
   };
 
   const goToNext = () => {
     setDirection(1);
-    setCurrentIndex((prev) => (prev + 1) % memes.length);
+    const nextIndex = (currentIndex + 1) % memes.length;
+    setCurrentIndex(nextIndex);
+    
+    // Update voting status for the new meme
+    const nextMeme = memes[nextIndex];
+    if (nextMeme) {
+      const voted = localStorage.getItem(`voted_meme_${nextMeme.cid}`);
+      setHasVoted(!!voted);
+    }
   };
 
   // ENHANCED: Voting functions with payment flow
@@ -271,15 +290,25 @@ const MemeView = () => {
       return;
     }
 
+    // Quick check if user has already voted on this specific meme
+    const mm = memes[currentIndex];
+    const existingMemeVote = localStorage.getItem(`user_vote_${address}_meme_${mm.cid}`);
+    const existingMemeVoteSimple = localStorage.getItem(`voted_meme_${mm.cid}`);
+    
+    if (existingMemeVote || existingMemeVoteSimple) {
+      alert(`You have already voted on this meme!`);
+      return;
+    }
+
     setIsVoting(true);
     setShowReaction("like");
     
     try {
-      const mm = memes[currentIndex];
-      const result = await investInTemplate(address, parseInt(mm.memeTemplate), true);
+      const result = await investInTemplate(address, parseInt(mm.memeTemplate), true, mm.cid);
       
       if (result && result.success) {
-        localStorage.setItem(`voted_template_${templateId}`, 'true');
+        // Store vote for this specific meme, not the entire template
+        localStorage.setItem(`voted_meme_${mm.cid}`, 'true');
         setHasVoted(true);
         
         // Show success and auto-advance
@@ -324,10 +353,11 @@ const MemeView = () => {
     
     try {
       const mm = memes[currentIndex];
-      const result = await investInTemplate(address, parseInt(mm.memeTemplate), false);
+      const result = await investInTemplate(address, parseInt(mm.memeTemplate), false, mm.cid);
       
       if (result && result.success) {
-        localStorage.setItem(`voted_template_${templateId}`, 'true');
+        // Store vote for this specific meme, not the entire template
+        localStorage.setItem(`voted_meme_${mm.cid}`, 'true');
         setHasVoted(true);
         
         setTimeout(() => {

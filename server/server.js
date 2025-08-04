@@ -25,7 +25,7 @@ mongoose
 const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
 const relayerWallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
 
-const contractAddress = "0xd16Da71C739Bf59E919De5f179809F47093528DD";
+const contractAddress = "0x8045d6B10716F5Ea2c425409e106a619a08ba15D";
 const contractABI = CONTRACT.abi;
 
 // Initialize Auto-Settlement Service
